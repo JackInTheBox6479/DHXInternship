@@ -11,7 +11,7 @@ img_gray = cv2.imread('Test Images/test.jpg', cv2.IMREAD_GRAYSCALE)
 # Applies Sobel Filter
 def sobel(image):
     # Calculates horizontal and vertical gradients
-    gx = cv2.Sobel(image, cv2.CV_64F, 1, 1, ksize=3)
+    gx = cv2.Sobel(image, cv2.CV_64F, 1, 0, ksize=3)
     gy = cv2.Sobel(image, cv2.CV_64F, 0, 1, ksize=3)
 
     # Calculate magnitude
