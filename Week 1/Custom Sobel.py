@@ -1,14 +1,13 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 
 # Import image, blur to reduce noise
-img_original = cv2.imread('Test Images/test.jpg')
-img_gray = cv2.imread('Test Images/test.jpg', cv2.IMREAD_GRAYSCALE)
+img_original = cv2.imread('Test Images/test5.jpg')
+img_gray = cv2.imread('Test Images/test5.jpg', cv2.IMREAD_GRAYSCALE)
 img_gray = cv2.GaussianBlur(img_gray, (5, 5), 0)
 
 # Create black chalkboard with the same image dimension that we can draw the edges on
-img_draw2 = np.zeros((img_gray.shape[0], img_gray.shape[1], 3), dtype='uint8')
+img_drawn = np.zeros((img_gray.shape[0], img_gray.shape[1], 3), dtype='uint8')
 
 gx = {}
 gy = {}
@@ -22,7 +21,7 @@ for x in range(img_gray.shape[1]):
         if y == 0 or y == img_gray.shape[0]-1:
             continue
 
-        # Create kernel, cast to int to prevent overflow
+        # Create kernel shape, cast to int to prevent overflow
         top_left = img_gray[y - 1, x - 1].astype(int)
         left = img_gray[y, x - 1].astype(int)
         bottom_left = img_gray[y + 1, x - 1].astype(int)
@@ -40,13 +39,11 @@ for x in range(img_gray.shape[1]):
         gm[x, y] = np.sqrt(gx[x, y]**2 + gy[x, y]**2)
 
         # Set threshold to include only important edges
-        if gm[x, y] > 100:
-            img_draw2[y, x] = (255, 255, 255)
+        if gm[x, y] > 105:
+            img_drawn[y, x] = (255, 255, 255)
 
-cv2.imshow('Sobel', img_draw2)
-
-fix, axs = plt.subplots()
-axs.imshow(img_draw2)
+# cv2.imwrite("Test Images/Sobel.jpg", img_drawn)
+cv2.imshow('Sobel', img_drawn)
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()

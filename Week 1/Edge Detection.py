@@ -8,7 +8,6 @@ img_original = cv2.cvtColor(img_original, cv2.COLOR_BGR2RGB)
 img_gray = cv2.imread('Test Images/test.jpg', cv2.IMREAD_GRAYSCALE)
 # img_gray = cv2.GaussianBlur(img_gray, (7, 7), 0)
 
-
 # Applies Sobel Filter
 def sobel(image):
     # Calculates horizontal and vertical gradients
@@ -44,7 +43,7 @@ def canny(image, lower, upper):
 # cv2.imshow('Original', img_original)
 # cv2.imshow('Sobel', sobel(img_gray))
 # cv2.imshow('Laplacian', laplacian(img_gray))
-# cv2.imshow('Canny', canny(img_gray, 100, 300))
+# cv2.imshow('Canny', canny(img_gray, 50, 225))
 # cv2.imshow('Canny2', canny(img_gray, 50, 150))
 
 # Create Plots
@@ -64,7 +63,6 @@ axs[1, 2].imshow(canny(img_gray, 50, 150), cmap='gray')
 
 cv2.waitKey(0)
 cv2.destroyAllWindows()
-
 
 plt.subplots_adjust(wspace=.1, hspace=-.1)
 plt.show()
