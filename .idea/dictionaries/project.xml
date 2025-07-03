@@ -1,7 +1,13 @@
 <component name="ProjectDictionaryState">
   <dictionary name="project">
     <words>
+      <w>bndbox</w>
       <w>jackc</w>
+      <w>trainval</w>
+      <w>xmax</w>
+      <w>xmin</w>
+      <w>ymax</w>
+      <w>ymin</w>
     </words>
   </dictionary>
 </component>
