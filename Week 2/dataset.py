@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 
 
 class VOCDataset(Dataset):
-    def __init__(self, root, image_set="trainval", transforms=None):
+    def __init__(self, root, image_set, transforms):
         self.root = root
         self.image_set = image_set  # "trainval" or "test"
         self.transforms = transforms
@@ -74,15 +74,10 @@ class VOCDataset(Dataset):
             targets = torch.zeros((0, 5), dtype=torch.float32)
         else:
             targets = torch.tensor(targets, dtype=torch.float32)
+            #print(len(targets))
 
         # Apply transforms if provided
-        if self.transforms:
-            image = self.transforms(image)
-        else:
-            # Convert PIL image to tensor if no transforms
-            import torchvision.transforms as transforms
-            transform = transforms.Compose([transforms.Resize((448, 448)), transforms.ToTensor()])
-            image = transform(image)
+        image, targets = self.transforms(image, targets)
 
         return image, targets
 

@@ -36,7 +36,7 @@ class Compose(object):
 transform = Compose([transforms.Resize((448, 448)), transforms.ToTensor(),])
 
 def train_fn(train_loader, model, optimizer, loss_fn):
-    loop = tqdm(train_loader, laeve=True)
+    loop = tqdm(train_loader, leave=True)
     mean_loss = []
 
     for batch_idx, (x,y) in enumerate(loop):
@@ -60,14 +60,11 @@ def main():
     if LOAD_MODEL:
         load_checkpoint(torch.load(LOAD_MODEL_FILE), model, optimizer)
 
-    train_dataset = VOCDataset(
-        root = "data",
-        image_set=  "trainval",
-    )
-
+    train_dataset = VOCDataset(root = "data", image_set="trainval", transforms=transform)
     test_dataset = VOCDataset("data", image_set="test", transforms=transform)
-    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn) #, collate_fn=collate_fn
-    test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn) #collate_fn=collate_fn
+
+    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn)
 
     for epoch in range(EPOCHS):
         pred_boxes, target_boxes = get_bboxes(train_loader, model, iou_threshold=0.5, threshold=0.4)

@@ -124,7 +124,7 @@ def plot_image(image, boxes):
 
     plt.show()
 
-def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint'):
+def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint', device=None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
@@ -136,14 +136,16 @@ def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box
 
     for batch_idx, (x, labels) in enumerate(loader):
         x = x.to(device)
+        print(labels)
         labels = labels.to(device)
 
         with torch.no_grad():
             predictions = model(x)
 
         batch_size = x.shape[0]
-        true_bboxes = cellboxes_to_boxes(labels)
         bboxes = cellboxes_to_boxes(predictions)
+        print("preds done")
+        true_bboxes = cellboxes_to_boxes(labels)
 
         for idx in range(batch_size):
             nms_boxes = non_max_suppression(bboxes[idx], iou_threshold=iou_threshold, threshold=threshold, box_format=box_format)
@@ -161,7 +163,7 @@ def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box
     return all_pred_boxes, all_true_boxes
 
 def convert_cellboxes(predictions, S=7):
-    predictions = predictions.cpu().numpy()
+    predictions = predictions.cpu()
     batch_size = predictions.shape[0]
     predictions = predictions.reshape(batch_size, 7, 7, 30)
     bboxes1 = predictions[..., 21:25]
@@ -171,13 +173,13 @@ def convert_cellboxes(predictions, S=7):
 
     best_box = scores.argmax(0).unsqueeze(-1)
     best_boxes = bboxes1 * (1 - best_box) + best_box * bboxes2
-    cell_indices = torch.arrange(7).repeat(batch_size, 7, 1).unsqueeze(-1)
+    cell_indices = torch.arange(7).repeat(batch_size, 7, 1).unsqueeze(-1)
 
     x = 1 / S * (best_boxes[..., :1] + cell_indices)
     y = 1 / S * (best_boxes[..., 1:2] + cell_indices.permute(0, 2, 1, 3))
     w_y = 1 / S * best_boxes[..., 2:4]
 
-    converted_bboxes = torch.cat((x, y, w_y), dim=1)
+    converted_bboxes = torch.cat((x, y, w_y), dim=-1)
     predicted_class = predictions[..., :20].argmax(-1).unsqueeze(-1)
     best_confidence = torch.max(predictions[..., 20], predictions[..., 25]).unsqueeze(-1)
     converted_preds = torch.cat((predicted_class, best_confidence, converted_bboxes), dim=-1)
