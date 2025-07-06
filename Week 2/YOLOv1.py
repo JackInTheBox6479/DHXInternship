@@ -4,7 +4,8 @@ import cv2
 import xml.etree.ElementTree as ET
 import numpy as np
 
-shuffled_images = random.sample(os.listdir('Data/VOC2007trainval/JPEGImages'), len(os.listdir('Data/VOC2007trainval/JPEGImages')))
+shuffled_images = random.sample(os.listdir('data/VOC2007trainval/JPEGImages'), len(os.listdir(
+    'data/VOC2007trainval/JPEGImages')))
 dog_color = (0, 0, 255)
 person_color = (0, 255, 0)
 car_color = (255, 0, 0)
@@ -12,9 +13,9 @@ car_color = (255, 0, 0)
 # def manipimage(n):
 
 def drawimage(img):
-    image = cv2.imread(f'Data/VOC2007trainval/JPEGImages/{img}')
+    image = cv2.imread(f'data/VOC2007trainval/JPEGImages/{img}')
     try:
-        tree = ET.parse(f'Data/VOC2007trainval/Annotations/{str(img)[:6]}.xml')
+        tree = ET.parse(f'data/VOC2007trainval/Annotations/{str(img)[:6]}.xml')
         root = tree.getroot()
 
         for obj in root.findall('object'):
