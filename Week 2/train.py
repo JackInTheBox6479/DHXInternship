@@ -66,8 +66,8 @@ def main():
     )
 
     test_dataset = VOCDataset("data", image_set="test", transforms=transform)
-    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn) #, collate_fn=collate_fn
+    test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn) #collate_fn=collate_fn
 
     for epoch in range(EPOCHS):
         pred_boxes, target_boxes = get_bboxes(train_loader, model, iou_threshold=0.5, threshold=0.4)

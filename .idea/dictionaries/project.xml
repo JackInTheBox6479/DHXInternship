@@ -2,6 +2,7 @@
   <dictionary name="project">
     <words>
       <w>bndbox</w>
+      <w>cellboxes</w>
       <w>jackc</w>
       <w>maxpooling</w>
       <w>trainval</w>

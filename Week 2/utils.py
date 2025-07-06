@@ -124,7 +124,10 @@ def plot_image(image, boxes):
 
     plt.show()
 
-def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint', device='cuda'):
+def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint'):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
     all_pred_boxes = []
     all_true_boxes = []
 
@@ -158,7 +161,7 @@ def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box
     return all_pred_boxes, all_true_boxes
 
 def convert_cellboxes(predictions, S=7):
-    predictions = predictions.to('cpu')
+    predictions = predictions.cpu().numpy()
     batch_size = predictions.shape[0]
     predictions = predictions.reshape(batch_size, 7, 7, 30)
     bboxes1 = predictions[..., 21:25]
