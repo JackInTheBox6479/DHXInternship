@@ -3,6 +3,8 @@ from collections import Counter
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import patches
+
 
 def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
     box1_x1 = boxes_preds[..., 0:1] - boxes_preds[..., 2:3] / 2
@@ -115,7 +117,8 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
 
 def plot_image(image, boxes):
     """Plots predicted bounding boxes on the image"""
-    im = np.array(image)
+    #im = np.array(image)
+    im = image.permute(1, 2, 0).numpy()
     height, width, _ = im.shape
 
     # Create figure and axes
