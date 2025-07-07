@@ -15,11 +15,11 @@ LEARNING_RATE = 2e-5
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 16
 WEIGHT_DECAY = 0
-EPOCHS = 1
+EPOCHS = 3
 NUM_WORKERS = 2
 PIN_MEMORY = True
-LOAD_MODEL = False
-LOAD_MODEL_FILE = "overfit.pth.tar"
+LOAD_MODEL = True
+LOAD_MODEL_FILE = "my_checkpoint.pth.tar"
 IMG_DIR = "data/images"
 LABEL_DIR = "data/labels"
 
@@ -40,8 +40,14 @@ def train_fn(train_loader, model, optimizer, loss_fn):
     mean_loss = []
 
     for batch_idx, (x,y) in enumerate(loop):
-        x = [item.to(DEVICE) for item in x]
-        y = [item.to(DEVICE) for item in y]
+        if isinstance(x, list):
+            x = torch.stack([item.to(DEVICE) for item in x])
+        else:
+            x = x.to(DEVICE)
+        if isinstance(y, list):
+            y = torch.stack([item.to(DEVICE) for item in y])
+        else:
+            y = y.to(DEVICE)
         out = model(x)
         loss = loss_fn(out, y)
         mean_loss.append(loss.item())
@@ -49,9 +55,13 @@ def train_fn(train_loader, model, optimizer, loss_fn):
         loss.backward()
         optimizer.step()
 
-        print(f"Finished batch {batch_idx}")
-
         loop.set_postfix(loss=loss.item())
+
+    checkpoint = {
+        "state_dict": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+    }
+    save_checkpoint(checkpoint, filename=f"my_checkpoint.pth.tar")
 
     print(f"Mean loss was {sum(mean_loss)/len(mean_loss)}")
 
