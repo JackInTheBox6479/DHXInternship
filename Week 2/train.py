@@ -40,7 +40,8 @@ def train_fn(train_loader, model, optimizer, loss_fn):
     mean_loss = []
 
     for batch_idx, (x,y) in enumerate(loop):
-        x, y = x.to(DEVICE), y.to(DEVICE)
+        x = [item.to(DEVICE) for item in x]
+        y = [item.to(DEVICE) for item in y]
         out = model(x)
         loss = loss_fn(out, y)
         mean_loss.append(loss.item())
