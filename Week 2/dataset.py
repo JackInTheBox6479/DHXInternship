@@ -78,9 +78,34 @@ class VOCDataset(Dataset):
 
         # Apply transforms if provided
         image, targets = self.transforms(image, targets)
+        encoded_labels = encode_labels_to_yolo_grid(targets)
 
-        return image, targets
+        return image, encoded_labels
 
+def encode_labels_to_yolo_grid(label_boxes, S=7, B=2, C=20):
+    yolo_tensor = torch.zeros((S, S, C + B * 5))
+
+    for box in label_boxes:
+        class_label = int(box[0].item())
+        x, y, w, h = box[1:].tolist()
+
+        i = int(x * S)
+        j = int(y * S)
+
+        i = min(i, S - 1)
+        j = min(j, S - 1)
+
+        yolo_tensor[j, i, class_label] = 1.0
+
+        x_cell = x * S - i
+        y_cell = y * S - j
+
+        yolo_tensor[j, i, C : C + 5] = torch.tensor([x_cell, y_cell, w, h, 1.0])
+
+        # Optional: fill second bbox slot if needed
+        # yolo_tensor[j, i, C + 5 : C + 10] = torch.tensor([x_cell, y_cell, w, h, 1.0])
+
+    return yolo_tensor
 
 # Custom collate function for DataLoader
 def collate_fn(batch):

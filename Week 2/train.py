@@ -15,7 +15,7 @@ LEARNING_RATE = 2e-5
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 16
 WEIGHT_DECAY = 0
-EPOCHS = 5
+EPOCHS = 1
 NUM_WORKERS = 2
 PIN_MEMORY = True
 LOAD_MODEL = False
@@ -47,6 +47,8 @@ def train_fn(train_loader, model, optimizer, loss_fn):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        print(f"Finished batch {batch_idx}")
 
         loop.set_postfix(loss=loss.item())
 

@@ -136,15 +136,13 @@ def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box
 
     for batch_idx, (x, labels) in enumerate(loader):
         x = x.to(device)
-        print(labels)
-        labels = labels.to(device)
+        labels = torch.stack(labels).to(device)
 
         with torch.no_grad():
             predictions = model(x)
 
         batch_size = x.shape[0]
         bboxes = cellboxes_to_boxes(predictions)
-        print("preds done")
         true_bboxes = cellboxes_to_boxes(labels)
 
         for idx in range(batch_size):

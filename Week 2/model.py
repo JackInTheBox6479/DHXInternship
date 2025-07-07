@@ -46,7 +46,9 @@ class Yolov1(nn.Module):
 
     def forward(self, x):
         x = self.darknet(x)
-        return self.fcs(torch.flatten(x, start_dim=1))
+        x = torch.flatten(x, start_dim=1)
+        x = self.fcs(x)
+        return x
 
     def create_conv_layers(self, architecture):
         layers = []
@@ -78,12 +80,13 @@ class Yolov1(nn.Module):
         s, b, c = split_size, num_boxes, num_classes
 
         return nn.Sequential(
+            nn.Flatten(),
             nn.Linear(1024*s*s, 4096),
-            nn.ReLU(),
+            nn.LeakyReLU(0.1),
 
             # S * S is grid boxes
             # B * 5 is [x, y, w, h, confidence]
             # C is class probabilities (number of classes you are reading for)
             # For 7x7 grid with three objects, final output is 7x7x13 (assuming two objects)
-            nn.Linear(4096, s*s*(b*5+c))
+            nn.Linear(4096, 7 * 7 * 30) #s*s*(b*5+c)
         )
