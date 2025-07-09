@@ -5,14 +5,14 @@ def intersection_over_union(boxes1, boxes2):
     area1 = (boxes1[:, 2] - boxes1[:, 0]) * (boxes1[:, 3] - boxes1[:, 1])
     area2 = (boxes2[:, 2] - boxes2[:, 0]) * (boxes2[:, 3] - boxes2[:, 1])
 
-    x_left = torch.max(boxes1[:, 0], boxes2[:, 0])
-    y_top = torch.max(boxes1[:, 1], boxes2[:, 1])
+    x_left = torch.max(boxes1[:, None, 0], boxes2[:, 0])
+    y_top = torch.max(boxes1[:, None, 1], boxes2[:, 1])
 
-    x_right = torch.min(boxes1[:, 2], boxes2[:, 2])
-    y_bottom = torch.min(boxes1[:, 3], boxes2[:, 3])
+    x_right = torch.min(boxes1[:, None, 2], boxes2[:, 2])
+    y_bottom = torch.min(boxes1[:, None, 3], boxes2[:, 3])
 
-    intersection = (y_top - y_bottom) * (x_right - x_left)
-    union = area1 + area2 - intersection
+    intersection = (y_top - y_bottom).clamp(min=0) * (x_right - x_left).clamp(min=0)
+    union = area1[:, None] + area2 - intersection
 
     return intersection / union
 
@@ -36,8 +36,10 @@ def boxes_to_transformed_targets(gt_boxes, anchors):
     return regression_targets
 
 def apply_regression_to_anchors(box_transform_pred, anchors):
-    box_transform_pred = box_transform_pred.reshape(box_transform_pred.size(0), -1, 4)
+    box_transform_pred = box_transform_pred.reshape(
+        box_transform_pred.size(0), -1, 4)
 
+    # Get cx, cy, w, h from x1,y1,x2,y2
     w = anchors[:, 2] - anchors[:, 0]
     h = anchors[:, 3] - anchors[:, 1]
     center_x = anchors[:, 0] + 0.5 * w
@@ -48,20 +50,27 @@ def apply_regression_to_anchors(box_transform_pred, anchors):
     dw = box_transform_pred[..., 2]
     dh = box_transform_pred[..., 3]
 
+    # Prevent sending too large values into torch.exp()
     dw = torch.clamp(dw, max=math.log(1000.0 / 16))
     dh = torch.clamp(dh, max=math.log(1000.0 / 16))
 
-    pred_center_x = dx * w + center_x
-    pred_center_y = dy * h + center_y
-    pred_w = torch.exp(dw) * w
-    pred_h = torch.exp(dh) * h
+    pred_center_x = dx * w[:, None] + center_x[:, None]
+    pred_center_y = dy * h[:, None] + center_y[:, None]
+    pred_w = torch.exp(dw) * w[:, None]
+    pred_h = torch.exp(dh) * h[:, None]
 
-    pred_box_x1 = (pred_center_x - 0.5 * pred_w)
-    pred_box_y1 = (pred_center_y - 0.5 * pred_h)
-    pred_box_x2 = (pred_center_x + 0.5 * pred_w)
-    pred_box_y2 = (pred_center_y + 0.5 * pred_h)
+    pred_box_x1 = pred_center_x - 0.5 * pred_w
+    pred_box_y1 = pred_center_y - 0.5 * pred_h
+    pred_box_x2 = pred_center_x + 0.5 * pred_w
+    pred_box_y2 = pred_center_y + 0.5 * pred_h
 
-    pred_boxes = torch.stack((pred_box_x1, pred_box_y1, pred_box_x2, pred_box_y2), dim=2)
+    pred_boxes = torch.stack((
+        pred_box_x1,
+        pred_box_y1,
+        pred_box_x2,
+        pred_box_y2),
+        dim=2)
+
     return pred_boxes
 
 def sample_positive_negative(labels, positive_count, total_count):
@@ -77,25 +86,31 @@ def sample_positive_negative(labels, positive_count, total_count):
     pos_idxs = positive[perm_positive_idxs]
     neg_idxs = negative[perm_negative_idxs]
 
-    sampled_pos_idx_mask = torch.zeros_like(labels)
-    sampled_neg_idx_mask = torch.zeros_like(labels)
+    sampled_pos_idx_mask = torch.zeros_like(labels, dtype=torch.bool)
+    sampled_neg_idx_mask = torch.zeros_like(labels, dtype=torch.bool)
     sampled_neg_idx_mask[neg_idxs] = True
     sampled_pos_idx_mask[pos_idxs] = True
     return sampled_neg_idx_mask, sampled_pos_idx_mask
 
 def clamp_boxes_to_img_boundary(boxes, image_shape):
-    boxes_x1 = boxes[:, 0]
-    boxes_y1 = boxes[:, 1]
-    boxes_x2 = boxes[:, 2]
-    boxes_y2 = boxes[:, 3]
+    boxes_x1 = boxes[..., 0]
+    boxes_y1 = boxes[..., 1]
+    boxes_x2 = boxes[..., 2]
+    boxes_y2 = boxes[..., 3]
+
     height, width = image_shape[-2:]
 
     boxes_x1 = boxes_x1.clamp(min=0, max=width)
-    boxes_y1 = boxes_y1.clamp(min=0, max=height)
     boxes_x2 = boxes_x2.clamp(min=0, max=width)
+    boxes_y1 = boxes_y1.clamp(min=0, max=height)
     boxes_y2 = boxes_y2.clamp(min=0, max=height)
 
-    boxes = torch.cat((boxes_x1, boxes_y1, boxes_x2, boxes_y2), dim=-1)
+    boxes = torch.cat((
+        boxes_x1[..., None],
+        boxes_y1[..., None],
+        boxes_x2[..., None],
+        boxes_y2[..., None]),
+        dim=-1)
     return boxes
 
 def transform_boxes_to_original_size(boxes, new_size, original_size):
@@ -111,3 +126,12 @@ def transform_boxes_to_original_size(boxes, new_size, original_size):
     xmax = xmax * ratio_width
     ymax = ymax * ratio_height
     return torch.stack([xmin, ymin, xmax, ymax], dim=1)
+
+def save_checkpoint(state, filename = "faster_rcnn_voc2007.pth.tar"):
+    print("=> Saving checkpoint")
+    torch.save(state, filename)
+
+def load_checkpoint(checkpoint, model, optimizer):
+    print("=> Loading checkpoint")
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])

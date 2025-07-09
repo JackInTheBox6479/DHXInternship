@@ -41,21 +41,23 @@ class RegionProposalNetwork(nn.Module):
         h_ratios = torch.sqrt(aspect_ratios)
         w_ratios = 1 / h_ratios
 
-        ws = (w_ratios * scales.view(-1))
-        hs = (h_ratios * scales.view(-1))
+        ws = (w_ratios[:, None] * scales[None, :]).view(-1)
+        hs = (h_ratios[:, None] * scales[None, :]).view(-1)
 
         base_anchors = torch.stack([-ws, -hs, ws, hs], dim=1) / 2
         base_anchors = base_anchors.round()
 
-        shifts_x = torch.arange(0, grid_w, dtype=torch.int32, device = feat.device) * stride_w
+        shifts_x = torch.arange(0, grid_w, dtype=torch.int32, device=feat.device) * stride_w
         shifts_y = torch.arange(0, grid_h, dtype=torch.int32, device=feat.device) * stride_h
         shifts_y, shifts_x = torch.meshgrid(shifts_y, shifts_x, indexing='ij')
         shifts_y = shifts_y.reshape(-1)
         shifts_x = shifts_x.reshape(-1)
         shifts = torch.stack([shifts_x, shifts_y, shifts_x, shifts_y], dim=1)
 
+        # Fix the broadcasting issue:
         anchors = (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4))
         anchors = anchors.reshape(-1, 4)
+
         return anchors
 
     def assign_targets_to_anchors(self, anchors, gt_boxes):
@@ -69,7 +71,7 @@ class RegionProposalNetwork(nn.Module):
         best_match_gt_idx[between_thresholds] = -2
 
         best_anchor_iou_for_gt, _ = iou_matrix.max(dim=1)
-        gt_pred_pair_with_highest_iou = torch.where(iou_matrix == best_anchor_iou_for_gt)
+        gt_pred_pair_with_highest_iou = torch.where(iou_matrix == best_anchor_iou_for_gt[:, None])
         pred_inds_to_update = gt_pred_pair_with_highest_iou[1]
         best_match_gt_idx[pred_inds_to_update] = best_match_gt_idx_pre_thresholding[pred_inds_to_update]
         matched_gt_boxes = gt_boxes[best_match_gt_idx.clamp(min=0)]
@@ -94,6 +96,7 @@ class RegionProposalNetwork(nn.Module):
         proposals = proposals[top_n_idx]
         proposals = clamp_boxes_to_img_boundary(proposals, image_shape)
 
+
         min_size = 16
         ws, hs = proposals[:, 2] - proposals[:, 0], proposals[:, 3] - proposals[:, 1]
         keep = (ws >= min_size) & (hs >= min_size)
@@ -101,13 +104,16 @@ class RegionProposalNetwork(nn.Module):
         proposals = proposals[keep]
         cls_scores = cls_scores[keep]
 
-        keep_mask = torch.zeros_like(cls_scores)
+        keep_mask = torch.zeros_like(cls_scores, dtype=torch.bool)
         keep_indices = torch.ops.torchvision.nms(proposals, cls_scores, self.rpn_nms_threshold)
         keep_mask[keep_indices] = True
         keep_indices = torch.where(keep_mask)[0]
 
         post_nms_keep_indices = keep_indices[cls_scores[keep_indices].sort(descending=True)[1]]
-        proposals, cls_scores = (proposals[post_nms_keep_indices[:self.rpn_topk]], cls_scores[post_nms_keep_indices[:self.rpn_topk]])
+
+        proposals, cls_scores = (proposals[post_nms_keep_indices[:self.rpn_topk]],
+                                 cls_scores[post_nms_keep_indices[:self.rpn_topk]])
+
         return proposals, cls_scores
 
     def forward(self, image, feat, target=None):
@@ -117,19 +123,9 @@ class RegionProposalNetwork(nn.Module):
 
         anchors = self.generate_anchors(image, feat)
         number_of_anchors_per_location = cls_scores.size(1)
-        cls_scores = cls_scores.permute(0, 2, 3, 1).reshape(-1, 1)
 
-        expected = (
-                box_transform_pred.size(0)
-                * number_of_anchors_per_location
-                * 4
-                * rpn_feat.shape[-2]
-                * rpn_feat.shape[-1]
-        )
-
-        actual = box_transform_pred.numel()
-
-        print(f"Expected reshape size: {expected}, actual tensor size: {actual}")
+        cls_scores = cls_scores.permute(0, 2, 3, 1)
+        cls_scores = cls_scores.reshape(-1, 1)
 
         box_transform_pred = box_transform_pred.view(
             box_transform_pred.size(0),
@@ -140,27 +136,33 @@ class RegionProposalNetwork(nn.Module):
         box_transform_pred = box_transform_pred.permute(0, 3, 4, 1, 2)
         box_transform_pred = box_transform_pred.reshape(-1, 4)
 
-        proposals = apply_regression_to_anchors(box_transform_pred.detach().reshape(-1, 1, 4), anchors)
+        proposals = apply_regression_to_anchors(
+            box_transform_pred.detach().reshape(-1, 1, 4),
+            anchors)
         proposals = proposals.reshape(proposals.size(0), 4)
 
         proposals, scores = self.filter_proposals(proposals, cls_scores.detach(), image.shape)
         rpn_output = {
             'proposals': proposals,
-            'scores': scores,
+            'scores': scores
         }
+
         if not self.training or target is None:
             return rpn_output
         else:
-            labels_for_anchors, matched_gt_boxes_for_anchors = self.assign_targets_to_anchors(anchors, target['bboxes'[0]])
+            labels_for_anchors, matched_gt_boxes_for_anchors = self.assign_targets_to_anchors(anchors, target['bboxes'][0])
             regression_targets = boxes_to_transformed_targets(matched_gt_boxes_for_anchors, anchors)
 
-            sampled_neg_idx_mask, sampled_pos_idx_mask = sample_positive_negative(labels_for_anchors, positive_count=self.rpn_pos_coint, total_count=self.rpn_batch_size)
-            sampled_idxs = torch.where(sampled_pos_idx_mask | sampled_neg_idx_mask)[0]
+            sampled_neg_idx_mask, sampled_pos_idx_mask = sample_positive_negative(
+                labels_for_anchors,
+                positive_count=self.rpn_pos_count,
+                total_count=self.rpn_batch_size)
+            sampled_idxs = torch.where(sampled_pos_idx_mask.bool() | sampled_neg_idx_mask.bool())[0]
 
             localization_loss = (
                 torch.nn.functional.smooth_l1_loss(
-                    box_transform_pred[sampled_pos_idx_mask],
-                    regression_targets[sampled_pos_idx_mask],
+                    box_transform_pred[sampled_pos_idx_mask.bool()],
+                    regression_targets[sampled_pos_idx_mask.bool()],
                     beta=1/9,
                     reduction='sum',
                 )
@@ -189,8 +191,8 @@ class ROIHead(nn.Module):
         self.pool_size = model_config['roi_pool_size']
         self.fc_inner_dim = model_config['fc_inner_dim']
 
-        self.fc6 = nn.Linear(in_channels * self.pool_size, self.fc_inner_dim)
-        self.fc7 = nn.Linear(self.fc_inner_dim, self.num_classes)
+        self.fc6 = nn.Linear(in_channels * self.pool_size * self.pool_size, self.fc_inner_dim)
+        self.fc7 = nn.Linear(self.fc_inner_dim, self.fc_inner_dim)
         self.cls_layer = nn.Linear(self.fc_inner_dim, self.num_classes)
         self.bbox_reg_layer = nn.Linear(self.fc_inner_dim, self.num_classes * 4)
 
@@ -201,18 +203,20 @@ class ROIHead(nn.Module):
 
     def assign_target_to_proposals(self, proposals, gt_boxes, gt_labels):
         iou_matrix = intersection_over_union(gt_boxes, proposals)
-        best_match_iou, best_match_gt_idx = iou_matrix.max(dim = 0)
+        best_match_iou, best_match_gt_idx = iou_matrix.max(dim=0)
         background_proposals = (best_match_iou < self.iou_threshold) & (best_match_iou >= self.low_bg_iou)
-        ignored_proposals = (best_match_iou < self.low_bg_iou)
+        ignored_proposals = best_match_iou < self.low_bg_iou
 
         best_match_gt_idx[background_proposals] = -1
         best_match_gt_idx[ignored_proposals] = -2
         matched_gt_boxes_for_proposals = gt_boxes[best_match_gt_idx.clamp(min=0)]
 
+
         labels = gt_labels[best_match_gt_idx.clamp(min=0)]
-        labels = labels.to(torch.int64)
+        labels = labels.to(dtype=torch.int64)
         labels[background_proposals] = 0
         labels[ignored_proposals] = -1
+
         return labels, matched_gt_boxes_for_proposals
 
     def forward(self, feat, proposals, image_shape, target):
@@ -223,7 +227,7 @@ class ROIHead(nn.Module):
             gt_labels = target['labels'][0]
 
             labels, matched_gt_boxes_for_proposals = self.assign_target_to_proposals(proposals, gt_boxes, gt_labels)
-            sampled_neg_idx_mask, sample_pos_idx_mask = sample_positive_negative(labels, positive_count=self.roi_pos_coint, total_count=self.roi_batch_size)
+            sampled_neg_idx_mask, sample_pos_idx_mask = sample_positive_negative(labels, positive_count=self.roi_pos_count, total_count=self.roi_batch_size)
             sampled_idxs = torch.where(sample_pos_idx_mask | sampled_neg_idx_mask)[0]
 
             proposals = proposals[sampled_idxs]
@@ -237,7 +241,6 @@ class ROIHead(nn.Module):
             approx_scale = float(s1) / float(s2)
             scale = 2 ** float(torch.tensor(approx_scale).log2().round())
             possible_scales.append(scale)
-        assert possible_scales[0] == possible_scales[1]
 
         proposal_roi_pool_feats = torchvision.ops.roi_pool(feat, [proposals], output_size=self.pool_size, spatial_scale=possible_scales[0])
         proposal_roi_pool_feats = proposal_roi_pool_feats.flatten(start_dim=1)
@@ -252,20 +255,23 @@ class ROIHead(nn.Module):
         frcnn_output = {}
 
         if self.training and target is not None:
+            labels = torch.clamp(labels, min=0, max=num_classes-1)
             classification_loss = torch.nn.functional.cross_entropy(cls_scores, labels)
-            fg_proposals_idxs = torch.where(labels > 0 )[0]
+
+            # Compute localization loss only for non-background labelled proposals
+            fg_proposals_idxs = torch.where(labels > 0)[0]
+            # Get class labels for these positive proposals
             fg_cls_labels = labels[fg_proposals_idxs]
 
             localization_loss = torch.nn.functional.smooth_l1_loss(
                 box_transform_pred[fg_proposals_idxs, fg_cls_labels],
                 regression_targets[fg_proposals_idxs],
-                beta =  1/9,
-                reduction = 'sum',
+                beta=1 / 9,
+                reduction="sum",
             )
-
-        localization_loss = localization_loss / labels.numel()
-        frcnn_output['frcnn_localization_loss'] = localization_loss
-        frcnn_output['frcnn_classification_loss'] = classification_loss
+            localization_loss = localization_loss / labels.numel()
+            frcnn_output['frcnn_classification_loss'] = classification_loss
+            frcnn_output['frcnn_localization_loss'] = localization_loss
 
         if self.training:
             return frcnn_output
@@ -276,7 +282,7 @@ class ROIHead(nn.Module):
             pred_scores = torch.nn.functional.softmax(cls_scores, dim=-1)
             pred_boxes = clamp_boxes_to_img_boundary(pred_boxes, image_shape)
 
-            pred_labels = torch.arrange(num_classes, device=device)
+            pred_labels = torch.arange(num_classes, device=device)
             pred_labels = pred_labels.view(1, -1).expand_as(pred_scores)
 
             pred_boxes = pred_boxes[:, 1:]
@@ -303,7 +309,7 @@ class ROIHead(nn.Module):
         keep = torch.where(keep)[0]
         pred_boxes, pred_scores, pred_labels = pred_boxes[keep], pred_scores[keep], pred_labels[keep]
 
-        keep_mask = torch.zeros_like(pred_scores)
+        keep_mask = torch.zeros_like(pred_scores, dtype = torch.bool)
         for class_id in torch.unique(pred_labels):
             curr_indices = torch.where(pred_labels == class_id)[0]
             curr_keep_indices = torch.ops.torchvision.nms(pred_boxes[curr_indices], pred_scores[curr_indices], self.nms_threshold)
@@ -382,7 +388,7 @@ class FasterRCNN(nn.Module):
         proposals = rpn_output['proposals']
 
         frcnn_output = self.roi_head(feat, proposals, image.shape[-2:], target)
-        if not self.traning:
+        if not self.training:
             frcnn_output['boxes'] = transform_boxes_to_original_size(frcnn_output['boxes'], image.shape[-2:], old_shape)
 
         return rpn_output, frcnn_output

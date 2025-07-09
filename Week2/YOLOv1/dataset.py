@@ -14,7 +14,6 @@ class VOCDataset(Dataset):
         image_sets_file = os.path.join(
             root, f'VOC2007{image_set}', 'ImageSets', 'Main', 'trainval.txt' if image_set == "trainval" else 'test.txt'
         )
-
         # Read list of image ids
         with open(image_sets_file) as f:
             self.image_ids = [line.strip() for line in f.readlines()]

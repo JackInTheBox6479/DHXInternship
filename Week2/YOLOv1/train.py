@@ -15,11 +15,11 @@ LEARNING_RATE = 1e-4
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 8
 WEIGHT_DECAY = 0
-EPOCHS = 0
+EPOCHS = 20
 NUM_WORKERS = 6
 PIN_MEMORY = True
 LOAD_MODEL = True
-LOAD_MODEL_FILE = "YOLOv1/my_checkpoint.pth.tar"
+LOAD_MODEL_FILE = "my_checkpoint.pth.tar"
 
 class Compose(object):
     def __init__(self, transforms):
@@ -68,8 +68,8 @@ def main():
     if LOAD_MODEL:
         load_checkpoint(torch.load(LOAD_MODEL_FILE), model, optimizer)
 
-    train_dataset = VOCDataset(root = "data", image_set="trainval", transforms=transform)
-    test_dataset = VOCDataset("data", image_set="test", transforms=transform)
+    train_dataset = VOCDataset(root = "../data", image_set="trainval", transforms=transform)
+    test_dataset = VOCDataset("../data", image_set="test", transforms=transform)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, num_workers=NUM_WORKERS, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn)
     test_loader = DataLoader(dataset=test_dataset, batch_size=BATCH_SIZE, pin_memory=PIN_MEMORY, shuffle=True, drop_last=True, collate_fn=collate_fn)
