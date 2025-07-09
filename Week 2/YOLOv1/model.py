@@ -10,15 +10,18 @@ architecture_config = [
     "M",
     (3, 192, 1, 1),
     "M",
+
     (1, 128, 1, 0),
     (3, 256, 1, 1),
     (1, 256, 1, 0),
     (3, 512, 1, 1),
     "M",
+
     [(1, 256, 1, 0), (3, 512, 1, 1), 4],
     (1, 512, 1, 0),
     (3, 1024, 1, 1),
     "M",
+
     [(1, 512, 1, 0), (3, 1024, 1, 1), 2],
     (3, 1024, 1, 1),
     (3, 1024, 2, 1),
@@ -87,6 +90,6 @@ class Yolov1(nn.Module):
             # S * S is grid boxes
             # B * 5 is [x, y, w, h, confidence]
             # C is class probabilities (number of classes you are reading for)
-            # For 7x7 grid with three objects, final output is 7x7x13 (assuming two objects)
+            # For 7x7 grid with three objects, final output is 30
             nn.Linear(4096, 7 * 7 * 30) #s*s*(b*5+c)
         )

@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 class VOCDataset(Dataset):
     def __init__(self, root, image_set, transforms):
         self.root = root
-        self.image_set = image_set  # "trainval" or "test"
+        self.image_set = image_set
         self.transforms = transforms
 
         image_sets_file = os.path.join(
@@ -49,6 +49,7 @@ class VOCDataset(Dataset):
         tree = ET.parse(annotation_path)
         root = tree.getroot()
 
+        # Find binding boxes and object types, add to "targets" tensor
         for obj in root.findall("object"):
             label = obj.find("name").text
             label_idx = self.class_to_idx[label]
@@ -70,18 +71,18 @@ class VOCDataset(Dataset):
 
         # Convert to tensor
         if len(targets) == 0:
-            # If no objects, return empty tensor with correct shape
             targets = torch.zeros((0, 5), dtype=torch.float32)
         else:
             targets = torch.tensor(targets, dtype=torch.float32)
             #print(len(targets))
 
-        # Apply transforms if provided
+        # Apply transforms
         image, targets = self.transforms(image, targets)
         encoded_labels = encode_labels_to_yolo_grid(targets)
 
         return image, encoded_labels
 
+# Essentially normalizing them, changing coords to grid coords
 def encode_labels_to_yolo_grid(label_boxes, S=7, B=2, C=20):
     yolo_tensor = torch.zeros((S, S, C + B * 5))
 
@@ -91,7 +92,6 @@ def encode_labels_to_yolo_grid(label_boxes, S=7, B=2, C=20):
 
         i = int(x * S)
         j = int(y * S)
-
         i = min(i, S - 1)
         j = min(j, S - 1)
 
@@ -102,14 +102,10 @@ def encode_labels_to_yolo_grid(label_boxes, S=7, B=2, C=20):
 
         yolo_tensor[j, i, C : C + 5] = torch.tensor([x_cell, y_cell, w, h, 1.0])
 
-        # Optional: fill second bbox slot if needed
-        # yolo_tensor[j, i, C + 5 : C + 10] = torch.tensor([x_cell, y_cell, w, h, 1.0])
-
     return yolo_tensor
 
 # Custom collate function for DataLoader
 def collate_fn(batch):
-    """Custom collate function for YOLO dataset"""
     images = []
     targets = []
 
@@ -117,8 +113,5 @@ def collate_fn(batch):
         images.append(sample[0])  # image tensor
         targets.append(sample[1])  # target tensor
 
-    # Stack images (they should all be the same size after transforms)
     images = torch.stack(images, 0)
-
-    # Don't stack targets - keep as list since they have different lengths
     return images, targets

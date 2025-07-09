@@ -1,21 +1,31 @@
 from collections import Counter
 
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
 
-
+# Finds intersection over union for two provided boxes
 def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
-    box1_x1 = boxes_preds[..., 0:1] - boxes_preds[..., 2:3] / 2
-    box1_y1 = boxes_preds[..., 1:2] - boxes_preds[..., 3:4] / 2
-    box1_x2 = boxes_preds[..., 0:1] + boxes_preds[..., 2:3] / 2
-    box1_y2 = boxes_preds[..., 1:2] + boxes_preds[..., 3:4] / 2
+    if box_format == "midpoint":
+        box1_x1 = boxes_preds[..., 0:1] - boxes_preds[..., 2:3] / 2
+        box1_y1 = boxes_preds[..., 1:2] - boxes_preds[..., 3:4] / 2
+        box1_x2 = boxes_preds[..., 0:1] + boxes_preds[..., 2:3] / 2
+        box1_y2 = boxes_preds[..., 1:2] + boxes_preds[..., 3:4] / 2
 
-    box2_x1 = boxes_labels[..., 0:1] - boxes_labels[..., 2:3] / 2
-    box2_y1 = boxes_labels[..., 1:2] - boxes_labels[..., 3:4] / 2
-    box2_x2 = boxes_labels[..., 0:1] + boxes_labels[..., 2:3] / 2
-    box2_y2 = boxes_labels[..., 1:2] + boxes_labels[..., 3:4] / 2
+        box2_x1 = boxes_labels[..., 0:1] - boxes_labels[..., 2:3] / 2
+        box2_y1 = boxes_labels[..., 1:2] - boxes_labels[..., 3:4] / 2
+        box2_x2 = boxes_labels[..., 0:1] + boxes_labels[..., 2:3] / 2
+        box2_y2 = boxes_labels[..., 1:2] + boxes_labels[..., 3:4] / 2
+    else:
+        box1_x1 = boxes_preds[..., 0:1]
+        box1_y1 = boxes_preds[..., 1:2]
+        box1_x2 = boxes_preds[..., 2:3]
+        box1_y2 = boxes_preds[..., 3:4] # (N, 1)
+
+        box2_x1 = boxes_labels[..., 0:1]
+        box2_y1 = boxes_labels[..., 1:2]
+        box2_x2 = boxes_labels[..., 2:3]
+        box2_y2 = boxes_labels[..., 3:4]
 
     x1 = torch.max(box1_x1, box2_x1)
     y1 = torch.max(box1_y1, box2_y1)
@@ -29,7 +39,8 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 
     return intersection / (box1_area + box2_area - intersection)
 
-def non_max_suppression(bboxes, iou_threshold, threshold, box_format='corners'):
+# Reduced redundant boxes TODO: This likely needs to be fixed
+def non_max_suppression(bboxes, iou_threshold, threshold, box_format):
     assert type(bboxes) == list
 
     bboxes = [box for box in bboxes if box[1] > threshold]
@@ -116,23 +127,14 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
     return sum(average_precisions) / len(average_precisions)
 
 def plot_image(image, boxes):
-    """Plots predicted bounding boxes on the image"""
-    #im = np.array(image)
     im = image.permute(1, 2, 0).numpy()
     height, width, _ = im.shape
-
-    # Create figure and axes
     fig, ax = plt.subplots(1)
-    # Display the image
     ax.imshow(im)
 
-    # box[0] is x midpoint, box[2] is width
-    # box[1] is y midpoint, box[3] is height
-
-    # Create a Rectangle potch
     for box in boxes:
         box = box[2:]
-        assert len(box) == 4, "Got more values than in x, y, w, h, in a box!"
+        assert len(box) == 4, "Box length too long"
         upper_left_x = box[0] - box[2] / 2
         upper_left_y = box[1] - box[3] / 2
         rect = patches.Rectangle(
@@ -143,12 +145,11 @@ def plot_image(image, boxes):
             edgecolor="r",
             facecolor="none",
         )
-        # Add the patch to the Axes
         ax.add_patch(rect)
 
     plt.show()
 
-
+# Find the predicted and target boxes for each image to calculate loss
 def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint', device=None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -185,6 +186,7 @@ def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box
     model.train()
     return all_pred_boxes, all_true_boxes
 
+# Convert prediction coordinates to the grid system
 def convert_cellboxes(predictions, S=7):
     predictions = predictions.cpu()
     batch_size = predictions.shape[0]
@@ -209,6 +211,7 @@ def convert_cellboxes(predictions, S=7):
 
     return converted_preds
 
+# Convert the grid coordinates to box coordinates
 def cellboxes_to_boxes(out, S=7):
     converted_pred = convert_cellboxes(out).reshape(out.shape[0], S * S, -1)
     converted_pred[..., 0] = converted_pred[..., 0].long()
@@ -223,7 +226,7 @@ def cellboxes_to_boxes(out, S=7):
 
     return all_bboxes
 
-def save_checkpoint(state, filename = "my_checkpoint.pth.tar"):
+def save_checkpoint(state, filename = "YOLOv1/my_checkpoint.pth.tar"):
     print("=> Saving checkpoint")
     torch.save(state, filename)
 
