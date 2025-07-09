@@ -54,12 +54,12 @@ def non_max_suppression(bboxes, iou_threshold, threshold, box_format):
             box
             for box in bboxes
             if box[0] != chosen_box[0]
-            or intersection_over_union(
+               or intersection_over_union(
                 torch.tensor(chosen_box[2:]),
                 torch.tensor(box[2:]),
-                box_format=box_format
+                box_format=box_format,
             )
-            < iou_threshold
+               < iou_threshold
         ]
 
         bboxes_after_nms.append(chosen_box)
@@ -226,7 +226,7 @@ def cellboxes_to_boxes(out, S=7):
 
     return all_bboxes
 
-def save_checkpoint(state, filename = "YOLOv1/my_checkpoint.pth.tar"):
+def save_checkpoint(state, filename = "my_checkpoint.pth.tar"):
     print("=> Saving checkpoint")
     torch.save(state, filename)
 

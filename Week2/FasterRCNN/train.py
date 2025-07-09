@@ -48,9 +48,6 @@ def train(args):
 
     faster_rcnn_model.train()
 
-    if not os.path.exists(train_config['task_name']):
-        os.mkdir(train_config['task_name'])
-
     scheduler = MultiStepLR(optimizer, milestones=train_config['lr_steps'], gamma=0.1)
 
     acc_steps = train_config['acc_steps']
@@ -107,7 +104,7 @@ def train(args):
         scheduler.step()
     print("Done Training")
 
-    test_image_path = "../data/VOC2007test/JPEGImages/000018.jpg"  # Change path as needed
+    test_image_path = "../data/VOC2007test/JPEGImages/000018.jpg"
     test_and_display_image(faster_rcnn_model, test_image_path)
 
 def test_and_display_image(model, image_path, confidence_threshold=0.5):
@@ -170,7 +167,7 @@ if __name__ == '__main__':
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(device)
-        test_and_display_image(model, args.image_path or "../data/VOC2007test/JPEGImages/000018.jpg", confidence_threshold=0.05)
+        test_and_display_image(model, args.image_path or "../data/VOC2007test/JPEGImages/000015.jpg", confidence_threshold=0.06)
     else:
         train(args)
 

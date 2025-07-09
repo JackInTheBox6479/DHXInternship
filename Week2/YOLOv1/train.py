@@ -11,11 +11,11 @@ from loss import YoloLoss
 seed = 123
 torch.manual_seed(seed)
 
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 8
 WEIGHT_DECAY = 0
-EPOCHS = 20
+EPOCHS = 10
 NUM_WORKERS = 6
 PIN_MEMORY = True
 LOAD_MODEL = True
@@ -56,7 +56,7 @@ def train_fn(train_loader, model, optimizer, loss_fn):
         "state_dict": model.state_dict(),
         "optimizer": optimizer.state_dict(),
     }
-    save_checkpoint(checkpoint, filename=f"YOLOv1/my_checkpoint.pth.tar")
+    save_checkpoint(checkpoint, filename=f"my_checkpoint.pth.tar")
 
     print(f"Mean loss was {sum(mean_loss)/len(mean_loss)}")
 
@@ -95,6 +95,7 @@ def main():
 # Draws an image from the test dataset
 def draw_test_image(dataset, model):
     idx = random.randint(0, len(dataset) - 1)
+    idx = 11
     image, label = dataset[idx]
     image_batch = image.unsqueeze(0).to(DEVICE)
 
@@ -112,7 +113,6 @@ def draw_test_image(dataset, model):
         threshold=0.4,
         box_format="midpoint"
     )
-
     # Plot the image with boxes
     plot_image(image, final_boxes)
 

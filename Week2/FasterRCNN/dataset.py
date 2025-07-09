@@ -73,6 +73,7 @@ class VOCDataset(Dataset):
         image = Image.open(image_info['filename']).convert("RGB")
         to_flip = False
 
+        # Flips random images to improve training accuracy
         if self.split == 'train' and random.random() < 0.5:
             to_flip = True
             image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)

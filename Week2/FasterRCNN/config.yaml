@@ -15,7 +15,7 @@ model_params:
   fc_inner_dim : 1024
   rpn_bg_threshold : 0.3
   rpn_fg_threshold : 0.7
-  rpn_nms_threshold : 0.7
+  rpn_nms_threshold : 0.2
   rpn_train_prenms_topk : 12000
   rpn_test_prenms_topk : 6000
   rpn_train_topk : 2000
@@ -23,7 +23,7 @@ model_params:
   rpn_batch_size : 256
   rpn_pos_fraction : 0.5
   roi_iou_threshold : 0.5
-  roi_low_bg_iou : 0.0 # increase it to 0.1 for hard negative
+  roi_low_bg_iou : 0.0
   roi_pool_size : 7
   roi_nms_threshold : 0.3
   roi_topk_detections : 100
@@ -34,8 +34,8 @@ model_params:
 train_params:
   task_name: 'voc'
   seed : 1111
-  acc_steps : 1 # increase you want to get gradients from >1 steps(kind of mimicking >1 batch size)
-  num_epochs: 30
+  acc_steps : 4
+  num_epochs: 3
   lr_steps : [12, 16]
   lr: 0.001
   ckpt_name: 'faster_rcnn_voc2007.pth.tar'

@@ -28,6 +28,7 @@ class RegionProposalNetwork(nn.Module):
             torch.nn.init.normal_(layer.weight, std=0.01)
             torch.nn.init.constant_(layer.bias, 0)
 
+    #Generate the anchor points (9)
     def generate_anchors(self, image, feat):
         grid_h, grid_w = feat.shape[-2:]
         image_h, image_w = image.shape[-2:]
@@ -54,7 +55,6 @@ class RegionProposalNetwork(nn.Module):
         shifts_x = shifts_x.reshape(-1)
         shifts = torch.stack([shifts_x, shifts_y, shifts_x, shifts_y], dim=1)
 
-        # Fix the broadcasting issue:
         anchors = (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4))
         anchors = anchors.reshape(-1, 4)
 
@@ -87,6 +87,7 @@ class RegionProposalNetwork(nn.Module):
 
         return labels, matched_gt_boxes
 
+    # Removes predictions that don't reach the threshold
     def filter_proposals(self, proposals, cls_scores, image_shape):
         cls_scores = cls_scores.reshape(-1)
         cls_scores = torch.sigmoid(cls_scores)
@@ -116,6 +117,7 @@ class RegionProposalNetwork(nn.Module):
 
         return proposals, cls_scores
 
+    # Main function for the RPN
     def forward(self, image, feat, target=None):
         rpn_feat = nn.ReLU()(self.rpn_conv(feat))
         cls_scores = self.cls_layer(rpn_feat)
@@ -337,7 +339,7 @@ class FasterRCNN(nn.Module):
         for layer in self.backbone[:10]:
             for p in layer.parameters():
                 p.requires_grad = False
-        self.image_mean = [0.486, 0.456, 0.406]
+        self.image_mean = [0.485, 0.456, 0.406]
         self.image_std = [0.229, 0.224, 0.225]
         self.min_size = model_config['min_im_size']
         self.max_size = model_config['max_im_size']
