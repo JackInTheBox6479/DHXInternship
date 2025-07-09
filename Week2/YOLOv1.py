@@ -4,6 +4,13 @@ import cv2
 import xml.etree.ElementTree as ET
 import numpy as np
 
+"""
+This is the initial test file I used to understand
+what the finished model should look like. It is 
+not related to either of the actual models. 
+"""
+
+
 shuffled_images = random.sample(os.listdir('data/VOC2007trainval/JPEGImages'), len(os.listdir(
     'data/VOC2007trainval/JPEGImages')))
 dog_color = (0, 0, 255)
