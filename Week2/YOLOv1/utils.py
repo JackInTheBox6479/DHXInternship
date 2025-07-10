@@ -34,8 +34,8 @@ def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
 
     intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
 
-    box1_area = abs((box1_x2 - box1_x1) * (box1_y2 - box1_y2))
-    box2_area = abs((box2_x2 - box2_x1) * (box2_y2 - box2_y2))
+    box1_area = abs((box1_x2 - box1_x1) * (box1_y2 - box1_y1))
+    box2_area = abs((box2_x2 - box2_x1) * (box2_y2 - box2_y1))
 
     return intersection / (box1_area + box2_area - intersection)
 
@@ -191,8 +191,15 @@ def convert_cellboxes(predictions, S=7):
     predictions = predictions.cpu()
     batch_size = predictions.shape[0]
     predictions = predictions.reshape(batch_size, 7, 7, 30)
+
     bboxes1 = predictions[..., 21:25]
     bboxes2 = predictions[..., 26:30]
+
+    bboxes1[..., 0:2] = torch.sigmoid(bboxes1[..., 0:2])
+    bboxes2[..., 0:2] = torch.sigmoid(bboxes2[..., 0:2])
+
+    bboxes1[..., 2:4] = torch.exp(bboxes1[..., 2:4])
+    bboxes2[..., 2:4] = torch.exp(bboxes2[..., 2:4])
 
     scores = torch.cat((predictions[..., 20].unsqueeze(0), predictions[..., 25].unsqueeze(0)), dim = 0)
 

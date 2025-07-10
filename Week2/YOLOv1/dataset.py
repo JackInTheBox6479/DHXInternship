@@ -77,7 +77,13 @@ class VOCDataset(Dataset):
 
         # Apply transforms
         image, targets = self.transforms(image, targets)
-        encoded_labels = encode_labels_to_yolo_grid(targets)
+
+        #print(f"dataset targets: {encoded_labels}")
+        #print(f'dataset image: {image}')
+        if self.image_set == 'trainval':
+            encoded_labels = encode_labels_to_yolo_grid(targets)
+        else:
+            encoded_labels = targets
 
         return image, encoded_labels
 

@@ -51,6 +51,16 @@ class Yolov1(nn.Module):
         x = self.darknet(x)
         x = torch.flatten(x, start_dim=1)
         x = self.fcs(x)
+
+        S, B, C = 7, 2, 20
+        x = x.reshape(-1, S, S, B * 5 + C)
+
+        # Sigmoid x, y and confidence scores
+        for b in range(B):
+            x[..., b * 5 + 0] = torch.sigmoid(x[..., b * 5 + 0])  # x
+            x[..., b * 5 + 1] = torch.sigmoid(x[..., b * 5 + 1])  # y
+            x[..., b * 5 + 4] = torch.sigmoid(x[..., b * 5 + 4])  # confidence
+
         return x
 
     def create_conv_layers(self, architecture):
