@@ -62,6 +62,8 @@ class RegionProposalNetwork(nn.Module):
 
     def assign_targets_to_anchors(self, anchors, gt_boxes):
         iou_matrix = intersection_over_union(gt_boxes, anchors)
+        print("Max IOU per anchor (avg):", iou_matrix.max(dim=0)[0].mean().item())
+
         best_match_iou, best_match_gt_idx = iou_matrix.max(dim=0)
         best_match_gt_idx_pre_thresholding = best_match_gt_idx.clone()
 
@@ -159,6 +161,9 @@ class RegionProposalNetwork(nn.Module):
                 labels_for_anchors,
                 positive_count=self.rpn_pos_count,
                 total_count=self.rpn_batch_size)
+
+            print("Positive RPN anchors:", sampled_pos_idx_mask.sum().item())
+
             sampled_idxs = torch.where(sampled_pos_idx_mask.bool() | sampled_neg_idx_mask.bool())[0]
 
             localization_loss = (
@@ -230,6 +235,9 @@ class ROIHead(nn.Module):
 
             labels, matched_gt_boxes_for_proposals = self.assign_target_to_proposals(proposals, gt_boxes, gt_labels)
             sampled_neg_idx_mask, sample_pos_idx_mask = sample_positive_negative(labels, positive_count=self.roi_pos_count, total_count=self.roi_batch_size)
+
+            print("Positive ROI samples:", sample_pos_idx_mask.sum().item())
+
             sampled_idxs = torch.where(sample_pos_idx_mask | sampled_neg_idx_mask)[0]
 
             proposals = proposals[sampled_idxs]
@@ -390,6 +398,7 @@ class FasterRCNN(nn.Module):
         proposals = rpn_output['proposals']
 
         frcnn_output = self.roi_head(feat, proposals, image.shape[-2:], target)
+
         if not self.training:
             frcnn_output['boxes'] = transform_boxes_to_original_size(frcnn_output['boxes'], image.shape[-2:], old_shape)
 

@@ -15,12 +15,12 @@ from loss import YoloLoss
 seed = 123
 torch.manual_seed(seed)
 
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-BATCH_SIZE = 8
-WEIGHT_DECAY = 0
+BATCH_SIZE = 32
+WEIGHT_DECAY = 1e-4
 EPOCHS = 0
-NUM_WORKERS = 10
+NUM_WORKERS = 8
 PIN_MEMORY = True
 LOAD_MODEL = True
 LOAD_MODEL_FILE = "my_checkpoint.pth.tar"
@@ -71,7 +71,7 @@ def main():
     print("Start Time =", current_time_str)
 
     model = Yolov1(split_size=7, num_boxes=2, num_classes=20).to(DEVICE)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     loss_fn = YoloLoss()
 
     if LOAD_MODEL:
@@ -139,23 +139,13 @@ def draw_test_image(dataset, model):
     with torch.no_grad():
         preds = model(image_batch)
 
-    print(preds)
-   # print(f'labels: {labels}')
-
-    #print(f"image: {image}")
-    #print(f"label: {labels}")
-    #print(f"image_batch: {image_batch}")
-
-
-    # Convert predictions to boxes
     pred_boxes = cellboxes_to_boxes(preds)
     pred_boxes = pred_boxes[0]
 
-    # Apply NMS
     final_boxes = non_max_suppression(
         pred_boxes,
-        iou_threshold=0.9,
-        threshold=0.2,
+        iou_threshold=0.0,
+        threshold=0.0,
         box_format="midpoint"
     )
     # Plot the image with boxes

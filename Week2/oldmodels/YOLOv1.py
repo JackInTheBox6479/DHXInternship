@@ -11,8 +11,8 @@ not related to either of the actual models.
 """
 
 
-shuffled_images = random.sample(os.listdir('data/VOC2007trainval/JPEGImages'), len(os.listdir(
-    'data/VOC2007trainval/JPEGImages')))
+shuffled_images = random.sample(os.listdir('../data/VOC2007trainval/JPEGImages'), len(os.listdir(
+    '../data/VOC2007trainval/JPEGImages')))
 dog_color = (0, 0, 255)
 person_color = (0, 255, 0)
 car_color = (255, 0, 0)

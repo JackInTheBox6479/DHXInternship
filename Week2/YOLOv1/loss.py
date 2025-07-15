@@ -19,7 +19,7 @@ class YoloLoss(nn.Module):
         ious = torch.cat([iou_b1.unsqueeze(0), iou_b2.unsqueeze(0)], dim=0)
 
         iou_maxes, bestbox = torch.max(ious, dim=0)
-        exists_box = target[..., 20].unsqueeze(3)  # in paper this is Iobj_i
+        exists_box = target[..., 20].unsqueeze(3)
 
         box_predictions = exists_box * (
             (

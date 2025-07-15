@@ -124,6 +124,8 @@ def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.5, box_format
         recalls = torch.cat((torch.tensor([0]), recalls))
         average_precisions.append(torch.trapz(precisions, recalls))
 
+    if len(average_precisions) == 0:
+        return 0.0
     return sum(average_precisions) / len(average_precisions)
 
 def plot_image(image, boxes):
@@ -152,7 +154,6 @@ def plot_image(image, boxes):
 # Find the predicted and target boxes for each image to calculate loss
 def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint', device=None):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
 
     all_pred_boxes = []
     all_true_boxes = []
@@ -198,8 +199,8 @@ def convert_cellboxes(predictions, S=7):
     bboxes1[..., 0:2] = torch.sigmoid(bboxes1[..., 0:2])
     bboxes2[..., 0:2] = torch.sigmoid(bboxes2[..., 0:2])
 
-    bboxes1[..., 2:4] = torch.exp(bboxes1[..., 2:4])
-    bboxes2[..., 2:4] = torch.exp(bboxes2[..., 2:4])
+    bboxes1[..., 2:4] = torch.clamp(bboxes1[..., 2:4], min=0.0, max=1.0)
+    bboxes2[..., 2:4] = torch.clamp(bboxes2[..., 2:4], min=0.0, max=1.0)
 
     scores = torch.cat((predictions[..., 20].unsqueeze(0), predictions[..., 25].unsqueeze(0)), dim = 0)
 
@@ -212,10 +213,17 @@ def convert_cellboxes(predictions, S=7):
     w_y = 1 / S * best_boxes[..., 2:4]
 
     converted_bboxes = torch.cat((x, y, w_y), dim=-1)
-    predicted_class = predictions[..., :20].argmax(-1).unsqueeze(-1)
-    best_confidence = torch.max(predictions[..., 20], predictions[..., 25]).unsqueeze(-1)
-    converted_preds = torch.cat((predicted_class, best_confidence, converted_bboxes), dim=-1)
 
+    class_probs = torch.softmax(predictions[..., :20], dim=-1)
+    class_prob_result = torch.max(class_probs, dim=-1, keepdim=True)
+
+    predicted_class = class_prob_result.indices
+    class_prob = class_prob_result.values
+
+    best_confidence = torch.max(predictions[..., 20], predictions[..., 25]).unsqueeze(-1)
+    class_confidence = best_confidence * class_prob  # shape: (..., 1)
+
+    converted_preds = torch.cat((predicted_class, class_confidence, converted_bboxes), dim=-1)
     return converted_preds
 
 # Convert the grid coordinates to box coordinates

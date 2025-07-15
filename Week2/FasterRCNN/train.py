@@ -107,7 +107,7 @@ def train(args):
     test_image_path = "../data/VOC2007test/JPEGImages/000018.jpg"
     test_and_display_image(faster_rcnn_model, test_image_path)
 
-def test_and_display_image(model, image_path, confidence_threshold=0.5):
+def test_and_display_image(model, image_path, confidence_threshold=0):
     VOC_CLASSES = [
         '__background__', 'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus',
         'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
@@ -125,6 +125,7 @@ def test_and_display_image(model, image_path, confidence_threshold=0.5):
     boxes = frcnn_output['boxes'].cpu().numpy()
     labels = frcnn_output['labels'].cpu().numpy()
     scores = frcnn_output['scores'].cpu().numpy()
+
 
     keep = scores >= confidence_threshold
     boxes, labels, scores = boxes[keep], labels[keep], scores[keep]
@@ -167,7 +168,7 @@ if __name__ == '__main__':
             for k, v in state.items():
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(device)
-        test_and_display_image(model, args.image_path or "../data/VOC2007test/JPEGImages/000015.jpg", confidence_threshold=0.06)
+        test_and_display_image(model, args.image_path or "../data/VOC2007test/JPEGImages/002235.jpg", confidence_threshold=0)
     else:
         train(args)
 
