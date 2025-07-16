@@ -8,8 +8,9 @@ class YoloLoss(nn.Module):
         self.S = S
         self.B = B
         self.C = C
-        self.lambda_noobj = 0.5
-        self.lambda_coord = 5
+        self.lambda_noobj = 4
+        self.lambda_coord = 10
+        self.lambda_class = 2
 
     def forward(self, predictions, target):
         predictions = predictions.reshape(-1, self.S, self.S, self.C + self.B * 5)
@@ -30,14 +31,17 @@ class YoloLoss(nn.Module):
 
         box_targets = exists_box * target[..., 21:25]
 
-        box_predictions[..., 2:4] = torch.sign(box_predictions[..., 2:4]) * torch.sqrt(
-            torch.abs(box_predictions[..., 2:4] + 1e-6)
+        box_predictions_sqrt = box_predictions.clone()
+        box_targets_sqrt = box_targets.clone()
+
+        box_predictions_sqrt[..., 2:4] = torch.sign(box_predictions_sqrt[..., 2:4]) * torch.sqrt(
+            torch.abs(box_predictions_sqrt[..., 2:4] + 1e-6)
         )
-        box_targets[..., 2:4] = torch.sqrt(box_targets[..., 2:4])
+        box_targets_sqrt[..., 2:4] = torch.sqrt(box_targets_sqrt[..., 2:4])
 
         box_loss = self.mse(
-            torch.flatten(box_predictions, end_dim=-2),
-            torch.flatten(box_targets, end_dim=-2),
+            torch.flatten(box_predictions_sqrt, end_dim=-2),
+            torch.flatten(box_targets_sqrt, end_dim=-2),
         )
 
         pred_box = (
@@ -65,10 +69,10 @@ class YoloLoss(nn.Module):
         )
 
         loss = (
-                self.lambda_coord * box_loss  # first two rows in paper
-                + object_loss  # third row in paper
-                + self.lambda_noobj * no_object_loss  # forth row
-                + class_loss  # fifth row
+                self.lambda_coord * box_loss
+                + object_loss
+                + self.lambda_noobj * no_object_loss
+                + self.lambda_class * class_loss
         )
 
         return loss

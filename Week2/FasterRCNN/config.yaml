@@ -15,27 +15,27 @@ model_params:
   fc_inner_dim : 1024
   rpn_bg_threshold : 0.3
   rpn_fg_threshold : 0.7
-  rpn_nms_threshold : 0.2
+  rpn_nms_threshold : 0.7
   rpn_train_prenms_topk : 12000
   rpn_test_prenms_topk : 6000
   rpn_train_topk : 2000
   rpn_test_topk : 300
   rpn_batch_size : 256
   rpn_pos_fraction : 0.5
-  roi_iou_threshold : 0.3
+  roi_iou_threshold : 0.5
   roi_low_bg_iou : 0.0
   roi_pool_size : 7
-  roi_nms_threshold : 0.7
-  roi_topk_detections : 100
-  roi_score_threshold : 0.5 #0.05
+  roi_nms_threshold : 0.0 #0.5
+  roi_topk_detections : 5
+  roi_score_threshold : 0.02 #0.05
   roi_batch_size : 128
   roi_pos_fraction : 0.25
 
 train_params:
   task_name: 'voc'
   seed : 1111
-  acc_steps : 4
-  num_epochs: 10
+  acc_steps : 1
+  num_epochs: 3
   lr_steps : [12, 16]
-  lr: 0.001
+  lr: 0.0001
   ckpt_name: 'faster_rcnn_voc2007.pth.tar'

@@ -1,3 +1,5 @@
+from collections import Counter
+
 import torch
 import math
 
@@ -11,7 +13,7 @@ def intersection_over_union(boxes1, boxes2):
     x_right = torch.min(boxes1[:, None, 2], boxes2[:, 2])
     y_bottom = torch.min(boxes1[:, None, 3], boxes2[:, 3])
 
-    intersection = (y_top - y_bottom).clamp(min=0) * (x_right - x_left).clamp(min=0)
+    intersection = (x_right - x_left).clamp(min=0) * (y_bottom - y_top).clamp(min=0)
     union = area1[:, None] + area2 - intersection
 
     return intersection / union
@@ -32,14 +34,13 @@ def boxes_to_transformed_targets(gt_boxes, anchors):
     targets_dw = torch.log(gt_widths / widths)
     targets_dh = torch.log(gt_heights / heights)
 
-    regression_targets = torch.stack([targets_dx, targets_dy, targets_dw, targets_dh], dim=1)
+    regression_targets = torch.stack((targets_dx, targets_dy, targets_dw, targets_dh), dim=1)
     return regression_targets
 
 def apply_regression_to_anchors(box_transform_pred, anchors):
     box_transform_pred = box_transform_pred.reshape(
         box_transform_pred.size(0), -1, 4)
 
-    # Get cx, cy, w, h from x1,y1,x2,y2
     w = anchors[:, 2] - anchors[:, 0]
     h = anchors[:, 3] - anchors[:, 1]
     center_x = anchors[:, 0] + 0.5 * w
@@ -50,7 +51,6 @@ def apply_regression_to_anchors(box_transform_pred, anchors):
     dw = box_transform_pred[..., 2]
     dh = box_transform_pred[..., 3]
 
-    # Prevent sending too large values into torch.exp()
     dw = torch.clamp(dw, max=math.log(1000.0 / 16))
     dh = torch.clamp(dh, max=math.log(1000.0 / 16))
 
@@ -88,8 +88,8 @@ def sample_positive_negative(labels, positive_count, total_count):
 
     sampled_pos_idx_mask = torch.zeros_like(labels, dtype=torch.bool)
     sampled_neg_idx_mask = torch.zeros_like(labels, dtype=torch.bool)
-    sampled_neg_idx_mask[neg_idxs] = True
     sampled_pos_idx_mask[pos_idxs] = True
+    sampled_neg_idx_mask[neg_idxs] = True
     return sampled_neg_idx_mask, sampled_pos_idx_mask
 
 def clamp_boxes_to_img_boundary(boxes, image_shape):
@@ -125,7 +125,69 @@ def transform_boxes_to_original_size(boxes, new_size, original_size):
     ymin = ymin * ratio_height
     xmax = xmax * ratio_width
     ymax = ymax * ratio_height
-    return torch.stack([xmin, ymin, xmax, ymax], dim=1)
+    return torch.stack((xmin, ymin, xmax, ymax), dim=1)
+
+def mean_average_precision(pred_boxes, true_boxes, iou_threshold=0.05, box_format="midpoint", num_classes=21):
+    average_precisions = []
+    epsilon = 1e-6
+
+    for c in range(num_classes):
+        detections = []
+        ground_truths = []
+
+        for detection in pred_boxes:
+            if detection[1] == c:
+                detections.append(detection)
+
+        for true_box in true_boxes:
+            if true_box[1] == c:
+                ground_truths.append(true_box)
+
+        amount_bboxes = Counter([gt[0] for gt in ground_truths])
+
+        for key, val in amount_bboxes.items():
+            amount_bboxes[key] = torch.zeros(val)
+
+        detections.sort(key=lambda x: x[2], reverse=True)
+        TP = torch.zeros((len(detections)))
+        FP = torch.zeros((len(detections)))
+        total_true_bboxes = len(ground_truths)
+
+        if total_true_bboxes == 0:
+            continue
+
+        for detection_idx, detection in enumerate(detections):
+            ground_truth_img = [bbox for bbox in ground_truths if bbox[0] == detection[0]]
+
+            num_gts = len(ground_truth_img)
+            best_iou = 0
+
+            for idx, gt in enumerate(ground_truth_img):
+                iou = intersection_over_union(torch.tensor(detection[3:]), torch.tensor(gt[3:]), box_format=box_format)
+
+                if iou > best_iou:
+                    best_iou = iou
+                    best_gt_idx = idx
+
+            if best_iou > iou_threshold:
+                if amount_bboxes[detection[0]][best_gt_idx] == 0:
+                    TP[detection_idx] = 1
+                    amount_bboxes[detection[0]][best_gt_idx] = 1
+                else:
+                    FP[detection_idx] = 1
+
+        TP_cumsum = torch.cumsum(TP, dim=0)
+        FP_cumsum = torch.cumsum(FP, dim=0)
+        recalls = TP_cumsum / (total_true_bboxes + epsilon)
+        precisions = torch.divide(TP_cumsum, (TP_cumsum + FP_cumsum + epsilon))
+        precisions = torch.cat((torch.tensor([1]), precisions))
+        recalls = torch.cat((torch.tensor([0]), recalls))
+        average_precisions.append(torch.trapz(precisions, recalls))
+
+    if len(average_precisions) == 0:
+       # print("MAP is here returning 0")
+        return 0.0
+    return (sum(average_precisions) / len(average_precisions))
 
 def save_checkpoint(state, filename = "faster_rcnn_voc2007.pth.tar"):
     print("=> Saving checkpoint")

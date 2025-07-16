@@ -34,7 +34,7 @@ class CNNBlock(nn.Module):
         super(CNNBlock, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
         self.bn = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU()
+        self.relu = nn.LeakyReLU(0.1)
 
     def forward(self, x):
         return self.relu(self.bn(self.conv(x)))
@@ -49,19 +49,7 @@ class Yolov1(nn.Module):
 
     def forward(self, x):
         x = self.darknet(x)
-        x = torch.flatten(x, start_dim=1)
-        x = self.fcs(x)
-
-        S, B, C = 7, 2, 20
-        x = x.reshape(-1, S, S, B * 5 + C)
-
-        # Sigmoid x, y and confidence scores
-        for b in range(B):
-            x[..., b * 5 + 0] = torch.sigmoid(x[..., b * 5 + 0])  # x
-            x[..., b * 5 + 1] = torch.sigmoid(x[..., b * 5 + 1])  # y
-            x[..., b * 5 + 4] = torch.sigmoid(x[..., b * 5 + 4])  # confidence
-
-        return x
+        return self.fcs(torch.flatten(x, start_dim=1))
 
     def create_conv_layers(self, architecture):
         layers = []
@@ -75,7 +63,7 @@ class Yolov1(nn.Module):
                 in_channels = x[1]
 
             elif isinstance(x, str):
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+                layers += [nn.MaxPool2d(kernel_size=(2,2), stride=2)]
 
             elif isinstance(x, list):
                 conv1 = x[0]
@@ -95,6 +83,7 @@ class Yolov1(nn.Module):
         return nn.Sequential(
             nn.Flatten(),
             nn.Linear(1024*s*s, 4096),
+            nn.Dropout(0.0),
             nn.LeakyReLU(0.1),
 
             # S * S is grid boxes

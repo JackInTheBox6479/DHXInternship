@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torchvision
 import math
+
+from torchvision.models import VGG16_Weights
+
 from utils import *
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -53,7 +56,7 @@ class RegionProposalNetwork(nn.Module):
         shifts_y, shifts_x = torch.meshgrid(shifts_y, shifts_x, indexing='ij')
         shifts_y = shifts_y.reshape(-1)
         shifts_x = shifts_x.reshape(-1)
-        shifts = torch.stack([shifts_x, shifts_y, shifts_x, shifts_y], dim=1)
+        shifts = torch.stack((shifts_x, shifts_y, shifts_x, shifts_y), dim=1)
 
         anchors = (shifts.view(-1, 1, 4) + base_anchors.view(1, -1, 4))
         anchors = anchors.reshape(-1, 4)
@@ -62,13 +65,12 @@ class RegionProposalNetwork(nn.Module):
 
     def assign_targets_to_anchors(self, anchors, gt_boxes):
         iou_matrix = intersection_over_union(gt_boxes, anchors)
-        print("Max IOU per anchor (avg):", iou_matrix.max(dim=0)[0].mean().item())
 
         best_match_iou, best_match_gt_idx = iou_matrix.max(dim=0)
         best_match_gt_idx_pre_thresholding = best_match_gt_idx.clone()
 
         below_low_threshold = best_match_iou < self.low_iou_threshold
-        between_thresholds = (best_match_iou >= self.low_iou_threshold) & (best_match_iou < self.rpn_nms_threshold)
+        between_thresholds = (best_match_iou >= self.low_iou_threshold) & (best_match_iou < self.high_iou_threshold)
         best_match_gt_idx[below_low_threshold] = -1
         best_match_gt_idx[between_thresholds] = -2
 
@@ -162,14 +164,13 @@ class RegionProposalNetwork(nn.Module):
                 positive_count=self.rpn_pos_count,
                 total_count=self.rpn_batch_size)
 
-            print("Positive RPN anchors:", sampled_pos_idx_mask.sum().item())
 
-            sampled_idxs = torch.where(sampled_pos_idx_mask.bool() | sampled_neg_idx_mask.bool())[0]
+            sampled_idxs = torch.where(sampled_pos_idx_mask | sampled_neg_idx_mask)[0]
 
             localization_loss = (
                 torch.nn.functional.smooth_l1_loss(
-                    box_transform_pred[sampled_pos_idx_mask.bool()],
-                    regression_targets[sampled_pos_idx_mask.bool()],
+                    box_transform_pred[sampled_pos_idx_mask],
+                    regression_targets[sampled_pos_idx_mask],
                     beta=1/9,
                     reduction='sum',
                 )
@@ -236,7 +237,6 @@ class ROIHead(nn.Module):
             labels, matched_gt_boxes_for_proposals = self.assign_target_to_proposals(proposals, gt_boxes, gt_labels)
             sampled_neg_idx_mask, sample_pos_idx_mask = sample_positive_negative(labels, positive_count=self.roi_pos_count, total_count=self.roi_batch_size)
 
-            print("Positive ROI samples:", sample_pos_idx_mask.sum().item())
 
             sampled_idxs = torch.where(sample_pos_idx_mask | sampled_neg_idx_mask)[0]
 
@@ -265,7 +265,6 @@ class ROIHead(nn.Module):
         frcnn_output = {}
 
         if self.training and target is not None:
-            labels = torch.clamp(labels, min=0, max=num_classes-1)
             classification_loss = torch.nn.functional.cross_entropy(cls_scores, labels)
 
             # Compute localization loss only for non-background labelled proposals
@@ -305,8 +304,8 @@ class ROIHead(nn.Module):
             pred_boxes, pred_labels, pred_scores = self.filter_predictions(pred_boxes, pred_labels, pred_scores)
 
             frcnn_output['boxes'] = pred_boxes
-            frcnn_output['labels'] = pred_labels
             frcnn_output['scores'] = pred_scores
+            frcnn_output['labels'] = pred_labels
             return(frcnn_output)
 
     def filter_predictions(self, pred_boxes, pred_labels, pred_scores):
@@ -335,8 +334,7 @@ class FasterRCNN(nn.Module):
     def __init__(self, model_config, num_classes):
         super(FasterRCNN, self).__init__()
         self.model_config = model_config
-        #TODO: Figure out if I can change this/if I need to
-        vgg16 = torchvision.models.vgg16()
+        vgg16 = torchvision.models.vgg16(weights=VGG16_Weights.DEFAULT)
         self.backbone = vgg16.features[:-1]
         self.rpn = RegionProposalNetwork(model_config['backbone_out_channels'],
                                          scales=model_config['scales'],
@@ -344,7 +342,7 @@ class FasterRCNN(nn.Module):
                                          model_config=model_config)
         self.roi_head = ROIHead(model_config, num_classes, in_channels=model_config['backbone_out_channels'])
 
-        for layer in self.backbone[:10]:
+        for layer in self.backbone[:5]:
             for p in layer.parameters():
                 p.requires_grad = False
         self.image_mean = [0.485, 0.456, 0.406]
@@ -381,7 +379,7 @@ class FasterRCNN(nn.Module):
             xmax = xmax * ratio_width
             ymin = ymin * ratio_height
             ymax = ymax * ratio_height
-            bboxes = torch.stack([xmin, ymin, xmax, ymax], dim=2)
+            bboxes = torch.stack((xmin, ymin, xmax, ymax), dim=2)
 
         return image, bboxes
 
