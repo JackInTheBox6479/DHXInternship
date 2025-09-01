@@ -51,6 +51,9 @@ class Yolov1(nn.Module):
         x = self.darknet(x)
         return self.fcs(torch.flatten(x, start_dim=1))
 
+    def get_darknet(self):
+        return self.darknet
+
     def create_conv_layers(self, architecture):
         layers = []
         in_channels = self.in_channels

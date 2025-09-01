@@ -25,7 +25,7 @@ model_params:
   roi_iou_threshold : 0.5
   roi_low_bg_iou : 0.0
   roi_pool_size : 7
-  roi_nms_threshold : 0.0 #0.5
+  roi_nms_threshold : 0.5 #0.5
   roi_topk_detections : 5
   roi_score_threshold : 0.02 #0.05
   roi_batch_size : 128
@@ -34,7 +34,7 @@ model_params:
 train_params:
   task_name: 'voc'
   seed : 1111
-  acc_steps : 1
+  acc_steps : 4
   num_epochs: 3
   lr_steps : [12, 16]
   lr: 0.0001

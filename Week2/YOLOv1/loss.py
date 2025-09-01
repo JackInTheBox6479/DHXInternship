@@ -8,9 +8,9 @@ class YoloLoss(nn.Module):
         self.S = S
         self.B = B
         self.C = C
-        self.lambda_noobj = 4
+        self.lambda_noobj = 0.5
         self.lambda_coord = 10
-        self.lambda_class = 2
+        self.lambda_class = 7
 
     def forward(self, predictions, target):
         predictions = predictions.reshape(-1, self.S, self.S, self.C + self.B * 5)

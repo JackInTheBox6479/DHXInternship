@@ -1,8 +1,17 @@
+import pickle
+import socket
+import struct
 from collections import Counter
+import time
 
+import cv2
 import torch
+import torchvision.transforms as T
 import matplotlib.pyplot as plt
 from matplotlib import patches
+
+from Week2.YOLOv1.model import Yolov1
+
 
 # Finds intersection over union for two provided boxes
 def intersection_over_union(boxes_preds, boxes_labels, box_format="midpoint"):
@@ -312,6 +321,7 @@ def plot_image(image, boxes, labels):
     plt.tight_layout()
     plt.show()
 
+
 # Find the predicted and target boxes for each image to calculate loss
 def get_bboxes(loader, model, iou_threshold, threshold, pred_format='cells', box_format='midpoint', device="cuda"):
 
@@ -408,3 +418,164 @@ def load_checkpoint(filepath, model, optimizer=None, device="cuda", LEARNING_RAT
 
     model.train()
     return model
+
+
+def plot_webcam():
+    W, H = 640, 480
+
+    # Force Matplotlib figure to 640x480 pixels
+    fig = plt.figure(figsize=(W / 100, H / 100), dpi=100)
+
+    cap = cv2.VideoCapture(0)
+    pTime = 0
+    frame_number = 0
+    frame_numbers_list = [0]
+    fps_list = [0]
+
+    while True:
+        success, img = cap.read()
+        if not success:
+            break
+
+        img = cv2.resize(img, (W, H))
+
+        # FPS calculation
+        cTime = time.time()
+        fps = 1 / (cTime - pTime) if pTime != 0 else 0
+        pTime = cTime
+
+        frame_numbers_list.append(frame_number)
+        fps_list.append(int(fps))
+        frame_number += 1
+
+        # Clear previous plot and draw new one
+        plt.clf()
+        plt.plot(frame_numbers_list, fps_list)
+        plt.title("FPS on every frame")
+        plt.ylabel("FPS")
+        plt.xlabel("Frame Number")
+
+        # Render to ARGB
+        fig.canvas.draw()
+        buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
+        w, h = fig.canvas.get_width_height()
+        buf = buf.reshape((h, w, 4))
+
+        # Convert ARGB → RGB (drop alpha and reorder channels)
+        plot = np.roll(buf, -1, axis=2)[..., :3]
+
+        # Resize to match webcam frame
+        plot = cv2.resize(plot, (W, H))
+
+        # Combine side by side
+        result_img = np.hstack([img, plot])
+
+        cv2.imshow("Image", result_img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+def process_webcam(frame, model):
+    IMG_SIZE = 448
+    device = 'cuda'
+    transform = T.Compose([
+        T.ToTensor(),
+    ])
+
+    VOC_CLASSES = [
+        "aeroplane", "bicycle", "bird", "boat", "bottle",
+        "bus", "car", "cat", "chair", "cow",
+        "diningtable", "dog", "horse", "motorbike", "person",
+        "pottedplant", "sheep", "sofa", "train", "tvmonitor"
+    ]
+
+    def draw_boxes_on_frame(frame, boxes, class_labels=None):
+        h, w, _ = frame.shape
+        for box in boxes:
+            class_pred = int(box[0])
+            prob = box[1]
+            x_mid, y_mid, width, height = box[2:]
+
+            x1 = int((x_mid - width / 2) * w)
+            y1 = int((y_mid - height / 2) * h)
+            x2 = int((x_mid + width / 2) * w)
+            y2 = int((y_mid + height / 2) * h)
+
+            color = (0, 255, 0)
+            label_text = f"{VOC_CLASSES[class_pred]} {prob:.2f}" if class_labels else f"cls:{class_pred} {prob:.2f}"
+
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            cv2.putText(frame, label_text, (x1, max(y1 - 5, 10)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+        return frame
+
+    resized_frame = cv2.resize(frame, (IMG_SIZE, IMG_SIZE))
+    rgb_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
+    image_tensor = transform(rgb_frame).unsqueeze(0).to(device)
+
+    with torch.no_grad():
+        preds = model(image_tensor)
+
+    pred_boxes = cellboxes_to_boxes(preds)[0]
+
+    final_boxes = non_max_suppression(
+        pred_boxes,
+        iou_threshold=0.3,
+        threshold=0.15,
+        box_format="midpoint"
+    )
+
+    annotated_frame = draw_boxes_on_frame(frame.copy(), final_boxes, class_labels=VOC_CLASSES)
+
+    return annotated_frame
+
+def receive_webcam():
+    HOST = '0.0.0.0'
+    PORT = 9999
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind((HOST, PORT))
+    server_socket.listen(5)
+    print(f"[*] Listening on {HOST}:{PORT}")
+
+    conn, addr = server_socket.accept()
+    print(f"[*] Accepted connection from {addr}")
+
+    data = b""
+    payload_size = struct.calcsize(">L")
+
+    model = Yolov1(split_size=7, num_boxes=2, num_classes=20).to('cuda')
+    load_checkpoint("my_checkpoint.pth.tar", model, optimizer=None, LEARNING_RATE=1e-4, WEIGHT_DECAY=1e-4)
+    model.eval()
+
+    while True:
+        while len(data) < payload_size:
+            packet = conn.recv(4096)
+            if not packet:
+                break
+            data += packet
+        if not data:
+            break
+
+        packed_msg_size = data[:payload_size]
+        data = data[payload_size:]
+        msg_size = struct.unpack(">L", packed_msg_size)[0]
+        while len(data) < msg_size:
+            data += conn.recv(4096)
+        frame_data = data[:msg_size]
+        data = data[msg_size:]
+
+        frame = pickle.loads(frame_data)
+        final_image = process_webcam(frame, model)
+
+        cv2.imshow("YOLOv1 Webcam", final_image)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+
+    conn.close()
+    server_socket.close()
+    cv2.destroyAllWindows()

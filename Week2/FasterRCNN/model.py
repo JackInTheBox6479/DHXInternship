@@ -164,7 +164,6 @@ class RegionProposalNetwork(nn.Module):
                 positive_count=self.rpn_pos_count,
                 total_count=self.rpn_batch_size)
 
-
             sampled_idxs = torch.where(sampled_pos_idx_mask | sampled_neg_idx_mask)[0]
 
             localization_loss = (
@@ -236,7 +235,6 @@ class ROIHead(nn.Module):
 
             labels, matched_gt_boxes_for_proposals = self.assign_target_to_proposals(proposals, gt_boxes, gt_labels)
             sampled_neg_idx_mask, sample_pos_idx_mask = sample_positive_negative(labels, positive_count=self.roi_pos_count, total_count=self.roi_batch_size)
-
 
             sampled_idxs = torch.where(sample_pos_idx_mask | sampled_neg_idx_mask)[0]
 
@@ -334,7 +332,7 @@ class FasterRCNN(nn.Module):
     def __init__(self, model_config, num_classes):
         super(FasterRCNN, self).__init__()
         self.model_config = model_config
-        vgg16 = torchvision.models.vgg16(weights=VGG16_Weights.DEFAULT)
+        vgg16 = torchvision.models.vgg16()
         self.backbone = vgg16.features[:-1]
         self.rpn = RegionProposalNetwork(model_config['backbone_out_channels'],
                                          scales=model_config['scales'],
@@ -342,7 +340,7 @@ class FasterRCNN(nn.Module):
                                          model_config=model_config)
         self.roi_head = ROIHead(model_config, num_classes, in_channels=model_config['backbone_out_channels'])
 
-        for layer in self.backbone[:5]:
+        for layer in self.backbone[:10]:
             for p in layer.parameters():
                 p.requires_grad = False
         self.image_mean = [0.485, 0.456, 0.406]

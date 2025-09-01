@@ -8,7 +8,7 @@ import random
 from PIL import Image
 from matplotlib import pyplot as plt, patches
 import xml.etree.ElementTree as ET
-from torch.amp import autocast
+from torch import autocast
 from model import FasterRCNN
 from tqdm import tqdm
 from dataset import VOCDataset
@@ -43,7 +43,7 @@ def train(args):
     faster_rcnn_model = FasterRCNN(model_config, num_classes=dataset_config['num_classes'])
     optimizer = torch.optim.Adam(faster_rcnn_model.parameters(), lr=train_config['lr'])
     faster_rcnn_model.to(device)
-    load_checkpoint(torch.load("faster_rcnn_voc2007.pth.tar"), faster_rcnn_model, optimizer)
+ #   load_checkpoint(torch.load("faster_rcnn_voc2007.pth.tar"), faster_rcnn_model, optimizer)
 
     faster_rcnn_model.train()
 
@@ -72,11 +72,16 @@ def train(args):
             target['bboxes'] = target['bboxes'].float().to(device)
             target['labels'] = target['labels'].long().to(device)
 
-            rpn_output, frcnn_output = faster_rcnn_model(image, target)
+            with autocast('cuda'):
+                rpn_output, frcnn_output = faster_rcnn_model(image, target)
 
-            rpn_loss = rpn_output['rpn_classification_loss'] + rpn_output['rpn_localization_loss']
-            frcnn_loss = frcnn_output['frcnn_classification_loss'] + frcnn_output['frcnn_localization_loss']
-            total_loss = rpn_loss + frcnn_loss
+                rpn_loss = rpn_output['rpn_classification_loss'] + rpn_output['rpn_localization_loss']
+                frcnn_loss = frcnn_output['frcnn_classification_loss'] + frcnn_output['frcnn_localization_loss']
+                total_loss = rpn_loss + frcnn_loss
+
+            if torch.isnan(total_loss) or torch.isinf(total_loss):
+                print("NaN/Inf detected!")
+               # exit()
 
             rpn_classification_losses.append(rpn_output['rpn_classification_loss'].item())
             rpn_localization_losses.append(rpn_output['rpn_localization_loss'].item())
@@ -86,6 +91,7 @@ def train(args):
             epoch_losses.append(total_loss.item())
             scaled_loss = total_loss / acc_steps
             scaled_loss.backward()
+            torch.nn.utils.clip_grad_norm_(faster_rcnn_model.parameters(), max_norm=1.0)
 
             if step_count % acc_steps == 0:
                 optimizer.step()
@@ -93,6 +99,8 @@ def train(args):
             step_count += 1
 
         print('Finished epoch {}'.format(i + 1))
+        optimizer.step()
+        optimizer.zero_grad()
 
         checkpoint = {
             "state_dict": faster_rcnn_model.state_dict(),

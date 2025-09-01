@@ -4,9 +4,12 @@ import random
 import numpy as np
 import seaborn as sns
 import torchvision.transforms as transforms
+from PIL.Image import Image
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from tqdm import tqdm
+
+from Week2.YOLOv1.GradCAM import GradCAM
 from model import Yolov1
 from dataset import VOCDataset, collate_fn
 from utils import *
@@ -15,7 +18,7 @@ from loss import YoloLoss
 seed = 123
 torch.manual_seed(seed)
 
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-5
 DEVICE = "cuda"
 BATCH_SIZE = 8
 WEIGHT_DECAY = 1e-4
@@ -82,15 +85,18 @@ def main():
         print(' ')
         print(f"Epoch: {epoch + 1} out of {EPOCHS}")
         pred_boxes, target_boxes = get_bboxes(train_loader, model, iou_threshold=0.05, threshold=0.4)
-        mean_avg_prec = mean_average_precision(pred_boxes, target_boxes, iou_threshold=0.05, box_format="midpoint")
 
-        print(f'Train mAP: {mean_avg_prec}')
+        #mean_avg_prec = mean_average_precision(pred_boxes, target_boxes, iou_threshold=0.05, box_format="midpoint")
+        #print(f'Train mAP: {mean_avg_prec}')
+
+        '''
         precisions, recalls = compute_precision_recall_curves(
             pred_boxes,
             target_boxes,
             num_classes=20,
             iou_threshold=0.05
         )
+        
         plt.figure(figsize=(6, 6))
         plt.plot(recalls, precisions, label="PR Curve")
         plt.xlabel("Recall")
@@ -101,11 +107,11 @@ def main():
         plt.grid()
         plt.legend()
         plt.show()
-
+        
         num_classes = 20
         cm = compute_confusion_matrix(pred_boxes, target_boxes, num_classes, iou_threshold=0.05)
-
-        VOC_CLASSES = [
+        
+         VOC_CLASSES = [
             'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus',
             'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike',
             'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor'
@@ -117,6 +123,8 @@ def main():
         plt.ylabel("Ground Truth")
         plt.title("Detection Confusion Matrix")
         plt.show()
+
+        '''
 
         mean_loss = train_fn(train_loader, model, optimizer, loss_fn)
         loss.append(sum(mean_loss)/len(mean_loss))
@@ -146,8 +154,8 @@ def main():
 
 # Draws an image from the test dataset
 def draw_test_image(dataset, model):
-    idx = random.randint(0, len(dataset) - 1)
-    #idx = 11
+    #idx = random.randint(0, len(dataset) - 1)
+    idx = 0
     image, labels = dataset[idx]
     image_batch = image.unsqueeze(0).to(DEVICE)
 
@@ -157,13 +165,14 @@ def draw_test_image(dataset, model):
     for box in labels:
         box.insert(1, 5)
 
+    image_batch.requires_grad = True
+
     with torch.no_grad():
         preds = model(image_batch)
 
-    pred_boxes = cellboxes_to_boxes(preds)
-    pred_boxes = pred_boxes[0]
+    pred_boxes = cellboxes_to_boxes(preds)[0]
 
-    #print("Pred_boxes:", pred_boxes)
+    print("Pred_boxes:", pred_boxes)
 
     final_boxes = non_max_suppression(
         pred_boxes,
@@ -171,10 +180,25 @@ def draw_test_image(dataset, model):
         threshold=0.2,
         box_format="midpoint"
     )
+
+    target_layer =  model.get_darknet()[-2]
+    cam = GradCAM(model, target_layer)
+    cam_output = cam.generate(image_batch)
+
+    img_np = image.permute(1, 2, 0).cpu().numpy()
+    img_np = (img_np - img_np.min()) / (img_np.max() - img_np.min())
+
+    plt.imshow(img_np)
+    plt.imshow(cam_output, cmap='jet', alpha=0.5)
+    plt.title("Grad-CAM Heatmap")
+    plt.axis('off')
+    plt.show()
+
     # Plot the image with boxes
     print(f'final_boxes: {final_boxes}')
     plot_image(image, final_boxes, labels)
 
 if __name__ == '__main__':
-    main()
+   main()
+   #receive_webcam()
 
